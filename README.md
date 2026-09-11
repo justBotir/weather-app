@@ -23,25 +23,41 @@ npm install
 
 ### Database
 
-Create the database (you will be prompted for your `postgres` password):
+Create the database and a dedicated role for the app. You will be prompted for
+your `postgres` password once; it is never stored in the project.
 
 ```bash
 createdb -U postgres -h localhost weather
 ```
 
-On Windows the PostgreSQL binaries are usually not on PATH. Full path for v17:
+```bash
+psql -U postgres -h localhost -d weather -c "CREATE ROLE weather LOGIN PASSWORD 'CHOOSE_A_PASSWORD' CREATEDB; ALTER DATABASE weather OWNER TO weather; ALTER SCHEMA public OWNER TO weather;"
+```
+
+Three details that are easy to miss:
+
+- **`CREATEDB`** is required. `prisma migrate dev` builds a temporary shadow
+  database on every run to diff your schema against the migration history;
+  without the privilege it fails with `P3014`.
+- **`ALTER SCHEMA public OWNER`** is required on PostgreSQL 15+, where
+  non-owners cannot create tables in `public`.
+- The app deliberately does **not** run as the `postgres` superuser. A dedicated
+  role limits the blast radius of any SQL flaw to this one database.
+
+On Windows the PostgreSQL binaries are usually not on PATH. Prefix them with the
+install path, e.g. for v17:
 
 ```bash
 "/c/Program Files/PostgreSQL/17/bin/createdb.exe" -U postgres -h localhost weather
 ```
 
-Then set `DATABASE_URL` in `.env` to your own credentials:
+Then put the role's password into `DATABASE_URL` in `.env`:
 
 ```
-DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/weather?schema=public"
+DATABASE_URL="postgresql://weather:CHOOSE_A_PASSWORD@localhost:5432/weather?schema=public"
 ```
 
-If your password contains `@ : / ? # [ ] %`, percent-encode it (`@` becomes `%40`).
+If the password contains `@ : / ? # [ ] %`, percent-encode it (`@` becomes `%40`).
 
 ```bash
 npm run db:migrate -w @weather/api -- --name init
