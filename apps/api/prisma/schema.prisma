@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Minimal user record. Swap the fields for whatever your auth provider
+/// (NextAuth / Clerk / Auth0) issues — only `id` is referenced elsewhere.
+///
+/// `email` is nullable because the app works before anyone signs in: the BFF
+/// mints an anonymous id into an httpOnly cookie and we create a row for it on
+/// first use. Attaching a real identity later is an UPDATE, not a migration.
+model User {
+  id        String   @id @default(cuid())
+  email     String?  @unique
+  name      String?
+  /// Distinguishes a cookie-only visitor from an authenticated account.
+  isAnonymous Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  favorites FavoriteLocation[]
+
+  @@map("users")
+}
+
+model FavoriteLocation {
+  id     String @id @default(cuid())
+  userId String
+
+  /// Canonical identity: `${lat.toFixed(4)}:${lon.toFixed(4)}`.
+  /// Never make a unique key out of raw floats.
+  locationKey String
+
+  name    String
+  country String  @db.Char(2)
+  state   String?
+
+  /// Decimal, not Float: exact round-tripping to the provider and to locationKey.
+  lat Decimal @db.Decimal(8, 5)
+  lon Decimal @db.Decimal(9, 5)
+
+  /// Optional user-supplied nickname, e.g. "Home".
+  label String?
+
+  /// Manual ordering for drag-and-drop; ties broken by createdAt.
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, locationKey])
+  @@index([userId, sortOrder])
+  @@map("favorite_locations")
+}
